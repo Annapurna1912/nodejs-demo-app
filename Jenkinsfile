@@ -1,28 +1,49 @@
+
 pipeline {
-  agent any
+    agent any
 
-
-  stages {
-    stage('Checkout') {
-      steps {
-        checkout scm
-      }
+    environment {
+        DOCKER_IMAGE = 'annapurna1993/nodejs-demo-app'
     }
-    stage('Build Docker Image') {
-      steps {
-        sh 'docker build -t nodejs-demo-app .'
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
         }
-      }
 
-    stage('Run Application') {
-      steps {
-        sh 'docker rm -f nodejs-demo-container || true '
-        sh 'docker run -d --name nodejs-demo-container -p 3000:3000 nodejs-demo-app'
-        } 
-      }
+        stage('Build Docker Image') {
+            steps {
+                sh 'docker build -t ${DOCKER_IMAGE}:${BUILD_NUMBER} .'
+                sh 'docker tag ${DOCKER_IMAGE}:${BUILD_NUMBER} ${DOCKER_IMAGE}:latest'
+            }
+        }
+
+        stage('Push to Docker Hub') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_TOKEN'
+                )]) {
+                    sh '''
+                        echo "$DOCKER_TOKEN" | docker login -u "$DOCKER_USER" --password-stdin
+                        docker push ${DOCKER_IMAGE}:${BUILD_NUMBER}
+                        docker push ${DOCKER_IMAGE}:latest
+                        docker logout
+                    '''
+                }
+            }
+        }
     }
 
-  }
+    post {
+        always {
+            echo 'Node.js CI/CD pipeline completed.'
+        }
+    }
+}
 
 
 
